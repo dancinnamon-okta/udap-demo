@@ -102,3 +102,6 @@ dist
 
 # TernJS port file
 .tern-port
+
+#No real serverless files
+serverless*.yml
