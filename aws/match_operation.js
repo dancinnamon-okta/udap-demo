@@ -9,6 +9,6 @@ module.exports.matchHandler = async (event, context) => {
 	return {
 		statusCode: handlerResponse.statusCode,
 		body: JSON.stringify(handlerResponse.body),
-		headers: {"Content-Type": "application/json"}
+		headers: handlerResponse.headers
 	}
 }
