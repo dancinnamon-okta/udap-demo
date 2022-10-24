@@ -104,4 +104,8 @@ dist
 .tern-port
 
 #No real serverless files
-serverless*.yml
+serverless.yml
+.DS_Store
+*.pem
+*.key
+*.crt
