@@ -109,3 +109,4 @@ serverless.yml
 *.pem
 *.key
 *.crt
+*.p12
