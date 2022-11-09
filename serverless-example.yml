@@ -1,4 +1,6 @@
-service: udap-demo-example
+#This is the config file for the Okta reference implementation of UDAP.
+
+service: okta-udap-reference
 
 plugins:
   - serverless-certificate-creator
@@ -7,33 +9,33 @@ plugins:
 params:
   default:
     #The domain name you want publicly as the base domain name.
-    BASE_DOMAIN: udap.your.tld
+    BASE_DOMAIN: your.domain.tld
 
     #Route53 hosted domain (include the period at the end)
-    BASE_TLD: your.tld.
+    BASE_TLD: domain.tld.
 
     #Allows us to set these paths because the backend authz server can have different token/authorize paths.
-    TOKEN_PATH: /oauth2/your_okta_authz_server_id_here/v1/token
-    AUTHORIZE_PATH: /oauth2/your_okta_authz_server_id_here/v1/authorize
+    TOKEN_PATH: /oauth2/yourauthzserverid/v1/token
+    AUTHORIZE_PATH: /oauth2/yourauthzserverid/v1/authorize
 
     #The hostname used for vanity URLs on the backend authz server.
-    OKTA_ORG_VANITY_URL_HOSTNAME: your_okta_org.customdomains.oktapreview.com
-
-    #Used in tiered-oauth. This is the authz server and public/private key to use.
-    TEMPLATE_OKTA_IDP_ID: fillmein
-    TEMPLATE_OKTA_IDP_KID: fillmein
+    OKTA_ORG_VANITY_URL_HOSTNAME: youroktatenantsubdomain.customdomains.oktapreview.com
 
     #Okta Org settings for calling the management endpoint.
-    OKTA_ORG: your_org.oktapreview.com
-    OKTA_CLIENT_ID: client_id_for_management_api
-    OKTA_PRIVATE_KEY_FILE: ./private_key_jwt_file_from_okta_apps_setup
-    OKTA_CLIENT_TOKEN_ENDPOINT: https://your_okta_org.oktapreview.com/oauth2/v1/token
+    OKTA_ORG: youroktatenantsubdomain.oktapreview.com
+    OKTA_CLIENT_ID: client_id_for_okta_m2m_app_for_management_api
+    OKTA_PRIVATE_KEY_FILE: ./private_key_jwks_file_from_app_in_okta
+    OKTA_CLIENT_TOKEN_ENDPOINT: https://youroktatenantsubdomain.oktapreview.com/oauth2/v1/token
 
     #Certificate to use to determine the trust community.
-    COMMUNITY_CERT: ./udap_pki/ca.crt
+    COMMUNITY_CERT: ./ca.crt
+    SERVER_KEY: ./server.p12
+    SERVER_KEY_PWD: your_p12_password
+
+    KEY_MAPPING_TABLE_NAME: 'udap_tiered_oauth_idp_mapping'
 
     #The backend domain name for the api gateway deployment.
-    API_GATEWAY_DOMAIN_NAME_BACKEND: your_api_gw_unique_id.execute-api.us-east-1.amazonaws.com
+    API_GATEWAY_DOMAIN_NAME_BACKEND: api_gateway_custom_domain_backend_url
 
 ##YOU SHOULD NOT NEED TO TOUCH ANYTHING BELOW THIS LINE
 provider:
@@ -61,6 +63,22 @@ provider:
 
     COMMUNITY_CERT: ${param:COMMUNITY_CERT}
 
+    SERVER_KEY: ${param:SERVER_KEY}
+    SERVER_KEY_PWD: ${param:SERVER_KEY_PWD}
+
+    KEY_MAPPING_TABLE_NAME: ${param:KEY_MAPPING_TABLE_NAME}
+
+#Provide additional access to allow read/write to our refresh token cache
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+      Resource:
+        Fn::GetAtt:
+          - keyMappingTable
+          - Arn
+
 #Lambda functions
 functions:
 
@@ -70,6 +88,15 @@ functions:
     events:
       - http:
           path: ${param:TOKEN_PATH}
+          method: POST
+          cors: true
+
+##OUTBOUND TOKEN ENDPOINT THAT PERFORMS UDAP SPECIFIC STUFF IN THE FINAL /TOKEN REQUEST.
+  tiered-token-client:
+    handler: ${self:provider.name}/tiered_token_client.tieredTokenClientHandler
+    events:
+      - http:
+          path: /{idpId}/tiered_client/token
           method: POST
           cors: true
 
@@ -84,6 +111,7 @@ functions:
 ##AUTHORIZE PROXY THAT PERFORMS TIERED-OAUTH2
   authorize-proxy:
     handler: ${self:provider.name}/authorize.authorizeHandler
+    timeout: 20
     events:
       - http:
           path: ${param:AUTHORIZE_PATH}
@@ -206,6 +234,22 @@ resources:
             SmoothStreaming: false
             TargetOriginId: ${param:API_GATEWAY_DOMAIN_NAME_BACKEND} ##THIS NEEDS TO BE THE OUTPUT OF THE CUSTOM DOMAIN THING.
             ViewerProtocolPolicy: "https-only"
+          -
+            AllowedMethods:
+            - "HEAD"
+            - "DELETE"
+            - "POST"
+            - "GET"
+            - "OPTIONS"
+            - "PUT"
+            - "PATCH"
+            Compress: false
+            CachePolicyId: "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+            OriginRequestPolicyId: "216adef6-5c7f-47e4-b989-5492eafa07d3"
+            PathPattern: /*/tiered_client/token
+            SmoothStreaming: false
+            TargetOriginId: ${param:API_GATEWAY_DOMAIN_NAME_BACKEND} ##THIS NEEDS TO BE THE OUTPUT OF THE CUSTOM DOMAIN THING.
+            ViewerProtocolPolicy: "https-only"
           Comment: ""
           PriceClass: "PriceClass_All"
           Enabled: true
@@ -219,3 +263,17 @@ resources:
           HttpVersion: "http2"
           DefaultRootObject: ""
           IPV6Enabled: false
+
+    keyMappingTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName:  ${param:KEY_MAPPING_TABLE_NAME}
+        AttributeDefinitions:
+          - AttributeName: idp_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: idp_id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
