@@ -17,6 +17,7 @@ params:
     #Allows us to set these paths because the backend authz server can have different token/authorize paths.
     TOKEN_PATH: /oauth2/yourauthzserverid/v1/token
     AUTHORIZE_PATH: /oauth2/yourauthzserverid/v1/authorize
+    METADATA_PATH: /oauth2/yourauthzserverid/.well-known/udap
 
     #The hostname used for vanity URLs on the backend authz server.
     OKTA_ORG_VANITY_URL_HOSTNAME: youroktatenantsubdomain.customdomains.oktapreview.com
@@ -50,11 +51,9 @@ provider:
   environment:
     BASE_DOMAIN: ${param:BASE_DOMAIN}
     EXTERNAL_TOKEN_ENDPOINT: https://${param:BASE_DOMAIN}${param:TOKEN_PATH}
+    EXTERNAL_AUTHORIZE_ENDPOINT: https://${param:BASE_DOMAIN}${param:AUTHORIZE_PATH}
     OKTA_ORG_VANITY_URL_TOKEN_ENDPOINT: https://${param:OKTA_ORG_VANITY_URL_HOSTNAME}${param:TOKEN_PATH}
     OKTA_ORG_VANITY_URL_AUTHORIZE_ENDPOINT: https://${param:OKTA_ORG_VANITY_URL_HOSTNAME}${param:AUTHORIZE_PATH}
-
-    TEMPLATE_OKTA_IDP_ID: ${param:TEMPLATE_OKTA_IDP_ID}
-    TEMPLATE_OKTA_IDP_KID: ${param:TEMPLATE_OKTA_IDP_KID}
 
     OKTA_ORG: ${param:OKTA_ORG}
     OKTA_CLIENT_ID: ${param:OKTA_CLIENT_ID}
@@ -117,6 +116,12 @@ functions:
           path: ${param:AUTHORIZE_PATH}
           method: GET
 
+  idp_udap_well_known:
+    handler: ${self:provider.name}/udap-well-known.udapConfigHandler
+    events:
+      - http:
+          path: ${param:METADATA_PATH}
+          method: GET
 
 custom:
   customCertificate:
@@ -247,6 +252,22 @@ resources:
             CachePolicyId: "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
             OriginRequestPolicyId: "216adef6-5c7f-47e4-b989-5492eafa07d3"
             PathPattern: /*/tiered_client/token
+            SmoothStreaming: false
+            TargetOriginId: ${param:API_GATEWAY_DOMAIN_NAME_BACKEND} ##THIS NEEDS TO BE THE OUTPUT OF THE CUSTOM DOMAIN THING.
+            ViewerProtocolPolicy: "https-only"
+          -
+            AllowedMethods:
+            - "HEAD"
+            - "DELETE"
+            - "POST"
+            - "GET"
+            - "OPTIONS"
+            - "PUT"
+            - "PATCH"
+            Compress: false
+            CachePolicyId: "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+            OriginRequestPolicyId: "216adef6-5c7f-47e4-b989-5492eafa07d3"
+            PathPattern: ${param:METADATA_PATH}
             SmoothStreaming: false
             TargetOriginId: ${param:API_GATEWAY_DOMAIN_NAME_BACKEND} ##THIS NEEDS TO BE THE OUTPUT OF THE CUSTOM DOMAIN THING.
             ViewerProtocolPolicy: "https-only"
