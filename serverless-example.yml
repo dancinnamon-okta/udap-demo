@@ -15,6 +15,7 @@ params:
     BASE_TLD: domain.tld.
 
     #Allows us to set these paths because the backend authz server can have different token/authorize paths.
+    ISSUER_PATH: /oauth2/yourauthzserverid
     TOKEN_PATH: /oauth2/yourauthzserverid/v1/token
     AUTHORIZE_PATH: /oauth2/yourauthzserverid/v1/authorize
     METADATA_PATH: /oauth2/yourauthzserverid/.well-known/udap
@@ -50,6 +51,7 @@ provider:
 
   environment:
     BASE_DOMAIN: ${param:BASE_DOMAIN}
+    ISSUER_PATH: https://${param:BASE_DOMAIN}${param:ISSUER_PATH}
     EXTERNAL_TOKEN_ENDPOINT: https://${param:BASE_DOMAIN}${param:TOKEN_PATH}
     EXTERNAL_AUTHORIZE_ENDPOINT: https://${param:BASE_DOMAIN}${param:AUTHORIZE_PATH}
     OKTA_ORG_VANITY_URL_TOKEN_ENDPOINT: https://${param:OKTA_ORG_VANITY_URL_HOSTNAME}${param:TOKEN_PATH}
